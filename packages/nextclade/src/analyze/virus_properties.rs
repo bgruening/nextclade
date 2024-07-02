@@ -1,7 +1,7 @@
 use crate::align::params::AlignPairwiseParamsOptional;
 use crate::alphabet::aa::Aa;
 use crate::alphabet::nuc::Nuc;
-
+use crate::analyze::aa_changes_find_for_cds::AaChangesParamsOptional;
 use crate::coord::position::AaRefPosition;
 use crate::coord::range::AaRefRange;
 use crate::gene::genotype::Genotype;
@@ -14,6 +14,7 @@ use crate::run::params_general::NextcladeGeneralParamsOptional;
 use crate::tree::params::TreeBuilderParamsOptional;
 use crate::utils::any::AnyType;
 use eyre::{Report, WrapErr};
+use ordered_float::OrderedFloat;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -24,7 +25,7 @@ const PATHOGEN_JSON_SCHEMA_VERSION_FROM: &str = "3.0.0";
 const PATHOGEN_JSON_SCHEMA_VERSION_TO: &str = "3.0.0";
 
 /// Contains external configuration and data specific for a particular pathogen
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, Validate)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct VirusProperties {
   pub schema_version: String,
@@ -38,8 +39,10 @@ pub struct VirusProperties {
   #[serde(default, skip_serializing_if = "DatasetMeta::is_default")]
   pub meta: DatasetMeta,
 
+  #[serde(default, skip_serializing_if = "DatasetFiles::is_default")]
   pub files: DatasetFiles,
 
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub default_cds: Option<String>,
 
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -48,13 +51,20 @@ pub struct VirusProperties {
   #[serde(default)]
   pub mut_labels: LabelledMutationsConfig,
 
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub qc: Option<QcConfig>,
 
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub general_params: Option<NextcladeGeneralParamsOptional>,
 
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub alignment_params: Option<AlignPairwiseParamsOptional>,
 
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub tree_builder_params: Option<TreeBuilderParamsOptional>,
+
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub aa_changes_params: Option<AaChangesParamsOptional>,
 
   pub phenotype_data: Option<Vec<PhenotypeData>>,
 
@@ -78,7 +88,7 @@ pub struct VirusProperties {
 pub type LabelMap<L> = BTreeMap<Genotype<L>, Vec<String>>;
 pub type NucLabelMap = LabelMap<Nuc>;
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, schemars::JsonSchema, Validate)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, schemars::JsonSchema, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct LabelledMutationsConfig {
   #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -87,41 +97,42 @@ pub struct LabelledMutationsConfig {
   pub other: serde_json::Value,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, schemars::JsonSchema, Validate)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PhenotypeDataIgnore {
   #[serde(default)]
   pub clades: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[serde(untagged)]
 pub enum PhenotypeCoeff {
-  ByPosition(f64),
-  ByPositionAndAa(BTreeMap<String, f64>),
+  ByPosition(OrderedFloat<f64>),
+  ByPositionAndAa(BTreeMap<String, OrderedFloat<f64>>),
   Other(serde_json::Value),
 }
 
 impl PhenotypeCoeff {
   pub fn get_coeff(&self, aa: Aa) -> f64 {
     match self {
-      PhenotypeCoeff::ByPosition(coeff) => Some(coeff),
+      PhenotypeCoeff::ByPosition(coeff) => Some(coeff.0),
       PhenotypeCoeff::ByPositionAndAa(aa_coeff_map) => aa_coeff_map
         .get(&aa.to_string())
-        .or_else(|| aa_coeff_map.get("default")),
+        .or_else(|| aa_coeff_map.get("default"))
+        .map(|c| c.0),
       PhenotypeCoeff::Other(_) => None,
     }
-    .unwrap_or(&0.0)
+    .unwrap_or(0.0)
     .to_owned()
   }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, Validate)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PhenotypeDataEntry {
   pub name: String,
-  pub weight: f64,
+  pub weight: OrderedFloat<f64>,
   pub locations: BTreeMap<AaRefPosition, PhenotypeCoeff>,
 }
 
@@ -131,7 +142,7 @@ impl PhenotypeDataEntry {
   }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, Validate)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PhenotypeData {
   pub name: String,
@@ -152,7 +163,7 @@ pub struct PhenotypeAttrDesc {
   pub description: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AaMotifsDesc {
   pub name: String,
@@ -165,7 +176,7 @@ pub struct AaMotifsDesc {
   pub include_cdses: Vec<CountAaMotifsCdsDesc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, Validate)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CountAaMotifsCdsDesc {
   pub cds: String,

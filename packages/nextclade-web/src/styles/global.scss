@@ -11,7 +11,9 @@
 
 @import './components/Results';
 
-html, body, #__next {
+html,
+body,
+#__next {
   overflow: hidden;
   height: 100%;
   width: 100%;
@@ -120,22 +122,6 @@ body {
 
 .cursor-pointer {
   cursor: pointer;
-}
-
-details {
-  height: auto;
-  max-height: 5rem;
-  transition: all 0.25s ease;
-}
-
-details[open] {
-  max-height: 99rem;
-  transition: all 0.25s ease;
-}
-
-details summary {
-  cursor: pointer;
-  font-weight: bold;
 }
 
 small {

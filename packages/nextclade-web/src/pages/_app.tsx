@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-
+import 'core-js'
 import 'css.escape'
 
 import { isEmpty, isNil } from 'lodash'
@@ -11,11 +11,12 @@ import dynamic from 'next/dynamic'
 import { sanitizeError } from 'src/helpers/sanitizeError'
 import { useRunAnalysis } from 'src/hooks/useRunAnalysis'
 import i18nAuspice, { changeAuspiceLocale } from 'src/i18n/i18n.auspice'
-import { createInputFastasFromUrlParam, createInputFromUrlParamMaybe } from 'src/io/createInputFromUrlParamMaybe'
+import { loadInputs } from 'src/io/loadInputs'
 import { mdxComponents } from 'src/mdx-components'
 import LoadingPage from 'src/pages/loading'
 import { globalErrorAtom } from 'src/state/error.state'
 import {
+  datasetJsonAtom,
   geneMapInputAtom,
   qrySeqInputsStorageAtom,
   refSeqInputAtom,
@@ -23,21 +24,14 @@ import {
   virusPropertiesInputAtom,
 } from 'src/state/inputs.state'
 import { localeAtom } from 'src/state/locale.state'
-import {
-  changelogIsShownAtom,
-  changelogLastVersionSeenAtom,
-  changelogShouldShowOnUpdatesAtom,
-  isInitializedAtom,
-} from 'src/state/settings.state'
+import { isInitializedAtom } from 'src/state/settings.state'
 import { configureStore } from 'src/state/store'
-import { shouldShowChangelog } from 'src/state/utils/changelog'
 import { ThemeProvider } from 'styled-components'
 import { Provider as ReactReduxProvider } from 'react-redux'
 import { I18nextProvider } from 'react-i18next'
 import { MDXProvider } from '@mdx-js/react'
 import { QueryClient, QueryClientConfig, QueryClientProvider } from 'react-query'
 import { ReactQueryDevtools } from 'react-query/devtools'
-
 import { DOMAIN_STRIPPED } from 'src/constants'
 import { parseUrl } from 'src/helpers/parseUrl'
 import { getDatasetServerUrl, initializeDatasets } from 'src/io/fetchDatasets'
@@ -63,7 +57,7 @@ RecoilEnv.RECOIL_DUPLICATE_ATOM_KEY_CHECKING_ENABLED = false
  * Dummy component that allows to set recoil state asynchronously. Needed because RecoilRoot's initializeState
  * currently only handles synchronous update and any calls to set() from promises have no effect
  */
-export function RecoilStateInitializer() {
+function RecoilStateInitializer() {
   const router = useRouter()
 
   // NOTE: Do manual parsing, because router.query is randomly empty on the first few renders and on repeated renders.
@@ -102,10 +96,10 @@ export function RecoilStateInitializer() {
 
         const datasetInfo = await fetchSingleDataset(urlQuery)
         if (!isNil(datasetInfo)) {
-          const { datasets, currentDataset } = datasetInfo
-          return { datasets, currentDataset, minimizerIndexVersion: undefined }
+          const { datasets, currentDataset, auspiceJson } = datasetInfo
+          return { datasets, currentDataset, minimizerIndexVersion: undefined, auspiceJson }
         }
-        return { datasets, currentDataset, minimizerIndexVersion }
+        return { datasets, currentDataset, minimizerIndexVersion, auspiceJson: undefined }
       })
       .catch((error) => {
         // Dataset error is fatal and we want error to be handled in the ErrorBoundary
@@ -113,37 +107,41 @@ export function RecoilStateInitializer() {
         set(globalErrorAtom, sanitizeError(error))
         throw error
       })
-      .then(async ({ datasets, currentDataset, minimizerIndexVersion }) => {
+      .then(async ({ datasets, currentDataset, minimizerIndexVersion, auspiceJson }) => {
         set(datasetsAtom, { datasets })
-        const previousDataset = await getPromise(datasetCurrentAtom)
+        let previousDataset = await getPromise(datasetCurrentAtom)
+        if (previousDataset?.type === 'auspiceJson') {
+          // Disregard previously saved dataset if it's Auspice dataset, because the data is no longer available.
+          // We might re-fetch instead, but need to persist URL for that somehow.
+          previousDataset = undefined
+        }
+
         const dataset = currentDataset ?? previousDataset
         set(datasetCurrentAtom, dataset)
         set(minimizerIndexVersionAtom, minimizerIndexVersion)
+
+        if (dataset?.type === 'auspiceJson' && !isNil(auspiceJson)) {
+          set(datasetJsonAtom, auspiceJson)
+        } else {
+          set(datasetJsonAtom, undefined)
+        }
         return dataset
       })
       .then(async (dataset) => {
-        const inputFastas = await createInputFastasFromUrlParam(urlQuery, dataset)
+        const { inputFastas, refSeq, geneMap, refTree, virusProperties } = await loadInputs(urlQuery, dataset)
+
+        set(refSeqInputAtom, refSeq)
+        set(geneMapInputAtom, geneMap)
+        set(refTreeInputAtom, refTree)
+        set(virusPropertiesInputAtom, virusProperties)
 
         if (!isEmpty(inputFastas)) {
           set(qrySeqInputsStorageAtom, inputFastas)
+          if (!isEmpty(dataset)) {
+            run()
+          }
         }
 
-        set(refSeqInputAtom, await createInputFromUrlParamMaybe(urlQuery, 'input-ref'))
-        set(geneMapInputAtom, await createInputFromUrlParamMaybe(urlQuery, 'input-annotation'))
-        set(refTreeInputAtom, await createInputFromUrlParamMaybe(urlQuery, 'input-tree'))
-        set(virusPropertiesInputAtom, await createInputFromUrlParamMaybe(urlQuery, 'input-pathogen-json'))
-
-        if (!isEmpty(inputFastas) && !isEmpty(dataset)) {
-          run()
-        }
-
-        return undefined
-      })
-      .then(async () => {
-        const changelogShouldShowOnUpdates = await getPromise(changelogShouldShowOnUpdatesAtom)
-        const changelogLastVersionSeen = await getPromise(changelogLastVersionSeenAtom)
-        set(changelogIsShownAtom, shouldShowChangelog(changelogLastVersionSeen, changelogShouldShowOnUpdates))
-        set(changelogLastVersionSeenAtom, (prev) => process.env.PACKAGE_VERSION ?? prev ?? '')
         return undefined
       })
       .then(() => {

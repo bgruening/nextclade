@@ -13,6 +13,7 @@ ARG YARN_VERSION="1.22.18"
 # Install required packages if running CentOS
 RUN set -euxo pipefail >/dev/null \
 && if [[ "$DOCKER_BASE_IMAGE" != centos* ]] && [[ "$DOCKER_BASE_IMAGE" != *manylinux2014* ]]; then exit 0; fi \
+&& sed -i -e 's/mirrorlist/#mirrorlist/g' -e 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* \
 && sed -i "s/enabled=1/enabled=0/g" "/etc/yum/pluginconf.d/fastestmirror.conf" \
 && sed -i "s/enabled=1/enabled=0/g" "/etc/yum/pluginconf.d/ovl.conf" \
 && yum clean all \
@@ -69,6 +70,7 @@ RUN set -euxo pipefail >/dev/null \
   gnupg \
   libssl-dev \
   lsb-release \
+  make \
   parallel \
   pigz \
   pixz \
@@ -114,11 +116,56 @@ ENV RUSTUP_HOME="${HOME}/.rustup"
 ENV NODE_DIR="/opt/node"
 ENV PATH="/usr/lib/llvm-${CLANG_VERSION}/bin:${NODE_DIR}/bin:${HOME}/.local/bin:${HOME}/.cargo/bin:${HOME}/.cargo/install/bin:${PATH}"
 
+# Make a user and group
+RUN set -euxo pipefail >/dev/null \
+&& \
+  if [ -z "$(getent group ${GID})" ]; then \
+    groupadd --system --gid ${GID} ${GROUP}; \
+  else \
+    groupmod --new-name ${GROUP} $(getent group ${GID} | cut -d: -f1); \
+  fi \
+&& export SUDO_GROUP="sudo" \
+&& \
+  if [[ "$DOCKER_BASE_IMAGE" == centos* ]] || [[ "$DOCKER_BASE_IMAGE" == *manylinux2014* ]]; then \
+    export SUDO_GROUP="wheel"; \
+  fi \
+&& \
+  if [ -z "$(getent passwd ${UID})" ]; then \
+    useradd \
+      --system \
+      --home-dir ${HOME} \
+      --create-home \
+      --shell /bin/bash \
+      --gid ${GROUP} \
+      --groups ${SUDO_GROUP},${GROUP} \
+      --uid ${UID} \
+      ${USER}; \
+  else \
+    usermod \
+      --home ${HOME} \
+      --move-home \
+      --shell /bin/bash \
+      --gid ${GROUP} \
+      --groups ${SUDO_GROUP},${GROUP} \
+      --append \
+      --uid ${UID} \
+      --login "${USER}" \
+      ${USER}; \
+  fi \
+&& sed -i /etc/sudoers -re 's/^%sudo.*/%sudo ALL=(ALL:ALL) NOPASSWD: ALL/g' \
+&& sed -i /etc/sudoers -re 's/^root.*/root ALL=(ALL:ALL) NOPASSWD: ALL/g' \
+&& sed -i /etc/sudoers -re 's/^#includedir.*/## **Removed the include directive** ##"/g' \
+&& echo "%sudo ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
+&& echo "${USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
+&& mkdir -p ${HOME} \
+&& chown -R ${UID}:${GID} "${HOME}" \
+&& touch ${HOME}/.hushlogin
+
 # Install Python dependencies
 RUN set -euxo pipefail >/dev/null \
 && pip3 install --user --upgrade cram
 
-# Install dasel, a tool to query TOML files
+# Install jq, a tool to query JSON files
 RUN set -euxo pipefail >/dev/null \
 && curl -fsSL -o "/usr/bin/jq" "https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64" \
 && chmod +x "/usr/bin/jq" \
@@ -151,40 +198,10 @@ RUN set -euxo pipefail >/dev/null \
 && sed -i'' "s/_this2\.reporter.warn(_this2\.reporter.lang('ignoredScripts'));//g" "${NODE_DIR}/lib/node_modules/yarn/lib/cli.js" \
 && sed -i'' 's/_this3\.reporter\.warn(_this3\.reporter\.lang(peerError.*;//g' "/opt/node/lib/node_modules/yarn/lib/cli.js"
 
-# Make a user and group
 RUN set -euxo pipefail >/dev/null \
-&& \
-  if [ -z "$(getent group ${GID})" ]; then \
-    groupadd --system --gid ${GID} ${GROUP}; \
-  else \
-    groupmod -n ${GROUP} $(getent group ${GID} | cut -d: -f1); \
-  fi \
-&& export SUDO_GROUP="sudo" \
-&& \
-  if [[ "$DOCKER_BASE_IMAGE" == centos* ]] || [[ "$DOCKER_BASE_IMAGE" == *manylinux2014* ]]; then \
-    export SUDO_GROUP="wheel"; \
-  fi \
-&& \
-  if [ -z "$(getent passwd ${UID})" ]; then \
-    useradd \
-      --system \
-      --create-home --home-dir ${HOME} \
-      --shell /bin/bash \
-      --gid ${GROUP} \
-      --groups ${SUDO_GROUP} \
-      --uid ${UID} \
-      ${USER}; \
-  fi \
-&& sed -i /etc/sudoers -re 's/^%sudo.*/%sudo ALL=(ALL:ALL) NOPASSWD:ALL/g' \
-&& sed -i /etc/sudoers -re 's/^root.*/root ALL=(ALL:ALL) NOPASSWD:ALL/g' \
-&& sed -i /etc/sudoers -re 's/^#includedir.*/## **Removed the include directive** ##"/g' \
-&& echo "%sudo ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
-&& echo "${USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
-&& touch ${HOME}/.hushlogin \
 && chown -R ${UID}:${GID} "${HOME}"
 
-
-USER ${USER}
+USER ${UID}
 
 # Install rustup and toolchain from rust-toolchain.toml
 COPY rust-toolchain.toml "${HOME}/rust-toolchain.toml"
@@ -200,7 +217,7 @@ RUN set -euxo pipefail >/dev/null \
 RUN set -euxo pipefail >/dev/null \
 && cd "${HOME}" \
 && RUST_TOOLCHAIN=$(dasel select -p toml -s ".toolchain.channel" -f "rust-toolchain.toml") \
-&& rustup toolchain install "${HOME}" \
+&& rustup toolchain install "${RUST_TOOLCHAIN}" \
 && rustup default "${RUST_TOOLCHAIN}"
 
 # Install remaining toolchain components from rust-toolchain.toml
@@ -245,6 +262,10 @@ RUN set -euxo pipefail >/dev/null \
 && curl -sSL "https://github.com/watchexec/cargo-watch/releases/download/v${CARGO_WATCH_VERSION}/cargo-watch-v${CARGO_WATCH_VERSION}-x86_64-unknown-linux-gnu.tar.xz" | tar -C "${CARGO_HOME}/bin" --strip-components=1 -xJ "cargo-watch-v${CARGO_WATCH_VERSION}-x86_64-unknown-linux-gnu/cargo-watch" \
 && chmod +x "${CARGO_HOME}/bin/cargo-watch"
 
+RUN set -euxo pipefail >/dev/null \
+&& export CARGO_NEXTEST_VERSION="0.9.67" \
+&& curl -sSL "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${CARGO_NEXTEST_VERSION}/cargo-nextest-${CARGO_NEXTEST_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar -C "${CARGO_HOME}/bin" -xz "cargo-nextest" \
+&& chmod +x "${CARGO_HOME}/bin/cargo-nextest"
 
 # Setup bash
 RUN set -euxo pipefail >/dev/null \
@@ -256,10 +277,7 @@ RUN set -euxo pipefail >/dev/null \
 && rustup completions bash cargo >>  ~/.bash_completion \
 && echo "source ~/.bash_completion" >> ~/.bashrc
 
-USER ${USER}
-
-WORKDIR ${HOME}/src
-
+USER ${UID}
 
 
 # Native compilation for Linux x86_64 with gnu-libc
@@ -286,7 +304,7 @@ SHELL ["bash", "-euxo", "pipefail", "-c"]
 RUN set -euxo pipefail >/dev/null \
 && curl -fsSL "https://more.musl.cc/11/x86_64-linux-musl/x86_64-linux-musl-cross.tgz" | tar -C "/usr" -xz --strip-components=1
 
-USER ${USER}
+USER ${UID}
 
 RUN set -euxo pipefail >/dev/null \
 && rustup target add x86_64-unknown-linux-musl
@@ -299,10 +317,14 @@ ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc
 # Cross-compilation to WebAssembly
 FROM base as cross-wasm32-unknown-unknown
 
+USER 0
+
 SHELL ["bash", "-euxo", "pipefail", "-c"]
 
 RUN set -euxo pipefail >/dev/null \
 && rustup target add wasm32-unknown-unknown
+
+USER ${UID}
 
 
 # Cross-compilation for Linux ARM64
@@ -323,7 +345,7 @@ RUN set -euxo pipefail >/dev/null \
 && apt-get autoremove --yes >/dev/null \
 && rm -rf /var/lib/apt/lists/*
 
-USER ${USER}
+USER ${UID}
 
 RUN set -euxo pipefail >/dev/null \
 && rustup target add aarch64-unknown-linux-gnu
@@ -331,7 +353,6 @@ RUN set -euxo pipefail >/dev/null \
 ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
 ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-
 
 # Cross-compilation for Linux ARM64 with libmusl
 FROM base as cross-aarch64-unknown-linux-musl
@@ -343,7 +364,7 @@ SHELL ["bash", "-euxo", "pipefail", "-c"]
 RUN set -euxo pipefail >/dev/null \
 && curl -fsSL "https://more.musl.cc/11/x86_64-linux-musl/aarch64-linux-musl-cross.tgz" | tar -C "/usr" -xz --strip-components=1
 
-USER ${USER}
+USER ${UID}
 
 RUN set -euxo pipefail >/dev/null \
 && rustup target add aarch64-unknown-linux-musl
@@ -370,7 +391,7 @@ RUN set -euxo pipefail >/dev/null \
 && apt-get autoremove --yes >/dev/null \
 && rm -rf /var/lib/apt/lists/*
 
-USER ${USER}
+USER ${UID}
 
 RUN set -euxo pipefail >/dev/null \
 && rustup target add x86_64-pc-windows-gnu
@@ -390,7 +411,7 @@ RUN set -euxo pipefail >/dev/null \
 && mkdir -p "/opt/osxcross" \
 && curl -fsSL "${OSXCROSS_URL}" | tar -C "/opt/osxcross" -xJ
 
-USER ${USER}
+USER ${UID}
 
 
 # Cross-compilation for macOS x86_64
@@ -398,7 +419,7 @@ FROM osxcross as cross-x86_64-apple-darwin
 
 SHELL ["bash", "-euxo", "pipefail", "-c"]
 
-USER ${USER}
+USER ${UID}
 
 RUN set -euxo pipefail >/dev/null \
 && rustup target add x86_64-apple-darwin
@@ -410,12 +431,23 @@ ENV CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER=x86_64-apple-darwin20.2-clang
 ENV CARGO_TARGET_X86_64_APPLE_DARWIN_STRIP=x86_64-apple-darwin20.2-strip
 
 
+USER 0
+
+ENV OSXCROSS_MP_INC=1
+ENV MACOSX_DEPLOYMENT_TARGET=10.7
+
+RUN set -euxo pipefail >/dev/null \
+&& echo "1" | osxcross-macports install openssl -v
+
+USER ${UID}
+
+
 # Cross-compilation for macOS ARM64
 FROM osxcross as cross-aarch64-apple-darwin
 
 SHELL ["bash", "-euxo", "pipefail", "-c"]
 
-USER ${USER}
+USER ${UID}
 
 RUN set -euxo pipefail >/dev/null \
 && rustup target add aarch64-apple-darwin
@@ -425,3 +457,13 @@ ENV CC_aarch64-apple-darwin=aarch64-apple-darwin20.2-clang
 ENV CXX_aarch64-apple-darwin=aarch64-apple-darwin20.2-clang++
 ENV CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER=aarch64-apple-darwin20.2-clang
 ENV CARGO_TARGET_AARCH64_APPLE_DARWIN_STRIP=aarch64-apple-darwin20.2-strip
+
+USER 0
+
+ENV OSXCROSS_MP_INC=1
+ENV MACOSX_DEPLOYMENT_TARGET=10.7
+
+RUN set -euxo pipefail >/dev/null \
+&& echo "1" | osxcross-macports install openssl -v
+
+USER ${UID}

@@ -7,7 +7,7 @@ use eyre::{ContextCompat, Report, WrapErr};
 use log::info;
 use nextclade::analyze::pcr_primers::PcrPrimer;
 use nextclade::gene::gene_map_display::gene_map_to_table_string;
-use nextclade::graph::graph::convert_graph_to_auspice_tree;
+use nextclade::graph::graph::Graph;
 use nextclade::io::fasta::{FastaReader, FastaRecord};
 use nextclade::io::json::{json_write, JsonPretty};
 use nextclade::io::nextclade_csv::CsvColumnConfig;
@@ -131,6 +131,7 @@ pub fn nextclade_run(run_args: NextcladeRunArgs) -> Result<(), Report> {
         clade_node_attr_key_descs,
         phenotype_attr_descs,
         aa_motif_keys,
+        ref_nodes,
         ..
       } = nextclade.get_initial_data();
 
@@ -138,6 +139,7 @@ pub fn nextclade_run(run_args: NextcladeRunArgs) -> Result<(), Report> {
         &nextclade.gene_map,
         clade_node_attr_key_descs,
         phenotype_attr_descs,
+        ref_nodes,
         aa_motif_keys,
         &csv_column_config,
         &run_args.outputs,
@@ -177,7 +179,7 @@ pub fn nextclade_run(run_args: NextcladeRunArgs) -> Result<(), Report> {
       graph_attach_new_nodes_in_place(&mut graph, outputs, ref_seq.len(), &params.tree_builder)?;
 
       if let Some(output_tree) = output_tree {
-        let tree = convert_graph_to_auspice_tree(&graph)?;
+        let tree = Graph::to_auspice_tree(&graph)?;
         json_write(output_tree, &tree, JsonPretty(true))?;
       }
 

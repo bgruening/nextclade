@@ -38,7 +38,7 @@ pub fn graph_attach_new_nodes_in_place(
     })?;
   }
 
-  graph.ladderize_tree().wrap_err("When ladderizing the resulting tree")?;
+  graph.ladderize().wrap_err("When ladderizing the resulting tree")?;
 
   add_auspice_metadata_in_place(&mut graph.data.meta);
 
@@ -371,7 +371,13 @@ pub fn knit_into_graph(
       }
       set_branch_attrs_aa_labels(&mut new_internal_node);
 
-      new_internal_node.name = format!("{target_key}_internal");
+      new_internal_node.name = {
+        let qry_name = &result.seq_name;
+        let qry_index = &result.index;
+        let target_name = &target_node_auspice.name;
+        format!("nextclade__copy_of_{target_name}_for_placement_of_{qry_name}_#{qry_index}")
+      };
+
       new_internal_node
     };
 

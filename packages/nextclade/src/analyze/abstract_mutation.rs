@@ -16,6 +16,13 @@ pub trait RefLetter<L: Letter<L>> {
   fn ref_letter(&self) -> L;
 }
 
+pub trait Sub<P, L>
+where
+  P: PositionLike,
+  L: Letter<L>,
+{
+}
+
 pub struct MutParams<P, L>
 where
   P: PositionLike,
@@ -28,6 +35,37 @@ where
 
 /// Trait for everything that looks like a mutation
 pub trait AbstractMutation<P, L>: Pos<P> + QryLetter<L> + RefLetter<L>
+where
+  P: PositionLike,
+  L: Letter<L>,
+{
+  #[must_use]
+  fn is_mutated(&self) -> bool {
+    self.qry_letter() != self.ref_letter()
+  }
+
+  #[must_use]
+  fn is_sub(&self) -> bool {
+    self.is_mutated() && !self.qry_letter().is_gap() && !self.is_unknown()
+  }
+
+  #[must_use]
+  fn is_del(&self) -> bool {
+    self.is_mutated() && self.qry_letter().is_gap()
+  }
+
+  #[must_use]
+  fn is_unknown(&self) -> bool {
+    self.qry_letter().is_unknown()
+  }
+
+  #[must_use]
+  fn is_mutated_and_not_unknown(&self) -> bool {
+    self.is_mutated() && !self.is_unknown()
+  }
+}
+
+pub trait CloneableMutation<P, L>: Pos<P> + QryLetter<L> + RefLetter<L>
 where
   P: PositionLike,
   L: Letter<L>,

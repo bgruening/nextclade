@@ -36,7 +36,7 @@ export const FlexRight = styled.div`
 export const DatasetName = styled.h4`
   margin-bottom: 0;
   font-weight: bold;
-  overflow-x: hidden;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 `
@@ -79,7 +79,7 @@ export function DatasetInfo({ dataset, showSuggestions, ...restProps }: DatasetI
     if (version?.tag === 'unreleased') {
       updatedAt = `${updatedAt} (${t('unreleased')})`
     }
-    return updatedAt
+    return updatedAt ?? t('unknown')
   }, [t, version?.tag, version?.updatedAt])
 
   const datasetName = attrStrMaybe(attributes, 'name') ?? path
