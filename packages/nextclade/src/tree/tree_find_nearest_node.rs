@@ -246,7 +246,15 @@ mod tests {
     let aln_range = NucRefGlobalRange::from_usize(0, 100);
     let masked_ranges = vec![];
 
-    let result = tree_calculate_node_distance(&node, &qry_nuc_subs, &qry_missing, &aln_range, &masked_ranges);
+    let qry_deletions: Vec<NucDelRange> = vec![];
+    let result = tree_calculate_node_distance(
+      &node,
+      &qry_nuc_subs,
+      &qry_missing,
+      &qry_deletions,
+      &aln_range,
+      &masked_ranges,
+    );
 
     assert_eq!(result, 0);
 
@@ -261,7 +269,15 @@ mod tests {
     let aln_range = NucRefGlobalRange::from_usize(0, 100);
     let masked_ranges = vec![];
 
-    let result = tree_calculate_node_distance(&node, &qry_nuc_subs, &qry_missing, &aln_range, &masked_ranges);
+    let qry_deletions: Vec<NucDelRange> = vec![];
+    let result = tree_calculate_node_distance(
+      &node,
+      &qry_nuc_subs,
+      &qry_missing,
+      &qry_deletions,
+      &aln_range,
+      &masked_ranges,
+    );
 
     assert_eq!(result, 3);
 
@@ -276,7 +292,15 @@ mod tests {
     let aln_range = NucRefGlobalRange::from_usize(0, 100);
     let masked_ranges = vec![];
 
-    let result = tree_calculate_node_distance(&node, &qry_nuc_subs, &qry_missing, &aln_range, &masked_ranges);
+    let qry_deletions: Vec<NucDelRange> = vec![];
+    let result = tree_calculate_node_distance(
+      &node,
+      &qry_nuc_subs,
+      &qry_missing,
+      &qry_deletions,
+      &aln_range,
+      &masked_ranges,
+    );
 
     assert_eq!(result, 5);
 
@@ -291,7 +315,15 @@ mod tests {
     let aln_range = NucRefGlobalRange::from_usize(0, 100);
     let masked_ranges = vec![];
 
-    let result = tree_calculate_node_distance(&node, &qry_nuc_subs, &qry_missing, &aln_range, &masked_ranges);
+    let qry_deletions: Vec<NucDelRange> = vec![];
+    let result = tree_calculate_node_distance(
+      &node,
+      &qry_nuc_subs,
+      &qry_missing,
+      &qry_deletions,
+      &aln_range,
+      &masked_ranges,
+    );
 
     assert_eq!(result, 5);
 
@@ -306,7 +338,15 @@ mod tests {
     let aln_range = NucRefGlobalRange::from_usize(0, 100);
     let masked_ranges = vec![];
 
-    let result = tree_calculate_node_distance(&node, &qry_nuc_subs, &qry_missing, &aln_range, &masked_ranges);
+    let qry_deletions: Vec<NucDelRange> = vec![];
+    let result = tree_calculate_node_distance(
+      &node,
+      &qry_nuc_subs,
+      &qry_missing,
+      &qry_deletions,
+      &aln_range,
+      &masked_ranges,
+    );
 
     assert_eq!(result, 4);
 
@@ -321,7 +361,15 @@ mod tests {
     let aln_range = NucRefGlobalRange::from_usize(0, 20);
     let masked_ranges = vec![];
 
-    let result = tree_calculate_node_distance(&node, &qry_nuc_subs, &qry_missing, &aln_range, &masked_ranges);
+    let qry_deletions: Vec<NucDelRange> = vec![];
+    let result = tree_calculate_node_distance(
+      &node,
+      &qry_nuc_subs,
+      &qry_missing,
+      &qry_deletions,
+      &aln_range,
+      &masked_ranges,
+    );
 
     assert_eq!(result, 3);
 
@@ -336,7 +384,15 @@ mod tests {
     let aln_range = NucRefGlobalRange::from_usize(0, 100);
     let masked_ranges = vec![NucRefGlobalRange::from_usize(0, 100)];
 
-    let result = tree_calculate_node_distance(&node, &qry_nuc_subs, &qry_missing, &aln_range, &masked_ranges);
+    let qry_deletions: Vec<NucDelRange> = vec![];
+    let result = tree_calculate_node_distance(
+      &node,
+      &qry_nuc_subs,
+      &qry_missing,
+      &qry_deletions,
+      &aln_range,
+      &masked_ranges,
+    );
 
     assert_eq!(result, 0);
 
@@ -355,7 +411,15 @@ mod tests {
       NucRefGlobalRange::from_usize(30, 50),
     ];
 
-    let result = tree_calculate_node_distance(&node, &qry_nuc_subs, &qry_missing, &aln_range, &masked_ranges);
+    let qry_deletions: Vec<NucDelRange> = vec![];
+    let result = tree_calculate_node_distance(
+      &node,
+      &qry_nuc_subs,
+      &qry_missing,
+      &qry_deletions,
+      &aln_range,
+      &masked_ranges,
+    );
 
     assert_eq!(result, 3);
 
@@ -370,9 +434,50 @@ mod tests {
     let aln_range = NucRefGlobalRange::from_usize(0, 30);
     let masked_ranges = vec![NucRefGlobalRange::from_usize(12, 13)];
 
-    let result = tree_calculate_node_distance(&node, &qry_nuc_subs, &qry_missing, &aln_range, &masked_ranges);
+    let qry_deletions: Vec<NucDelRange> = vec![];
+    let result = tree_calculate_node_distance(
+      &node,
+      &qry_nuc_subs,
+      &qry_missing,
+      &qry_deletions,
+      &aln_range,
+      &masked_ranges,
+    );
 
     assert_eq!(result, 3);
+
+    Ok(())
+  }
+
+  #[rstest]
+  fn deletion_covering_node_mutations_reduces_distance() -> Result<(), Report> {
+    let node = node_with_simple_nuc_subs();
+    let qry_nuc_subs: Vec<NucSub> = vec![];
+    let qry_missing: Vec<NucRange> = vec![];
+    let aln_range = NucRefGlobalRange::from_usize(0, 100);
+    let masked_ranges = vec![];
+
+    let no_deletions: Vec<NucDelRange> = vec![];
+    let distance_without_del = tree_calculate_node_distance(
+      &node,
+      &qry_nuc_subs,
+      &qry_missing,
+      &no_deletions,
+      &aln_range,
+      &masked_ranges,
+    );
+    assert_eq!(distance_without_del, 5);
+
+    let qry_deletions = vec![NucDelRange::from_usize(10, 25)];
+    let distance_with_del = tree_calculate_node_distance(
+      &node,
+      &qry_nuc_subs,
+      &qry_missing,
+      &qry_deletions,
+      &aln_range,
+      &masked_ranges,
+    );
+    assert_eq!(distance_with_del, 2);
 
     Ok(())
   }
