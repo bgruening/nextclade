@@ -691,16 +691,48 @@ Nextclade project tries hard to adhere to [Semantic Versioning 2.0.0](https://se
 - See the table in [Deployment environments](./developer-guide.md#deployment-environments)
 - Typically you aggregate the latest features on `master`, the occasionally push them to `staging` and finally to the `release`. So it's a pipeline. You almost never want your `release` or `staging` branch to be out-of sync with `master`, by e.g. having random things on `release`, but not on `master`.
 
+###### Release script dependencies
+
+The release script (`./scripts/release`) requires the following tools:
+
+- [`dasel`](https://github.com/TomWright/dasel) - reads version numbers from TOML/YAML files
+- [`jq`](https://jqlang.github.io/jq/) - updates `package.json` version
+- [`cargo-edit`](https://github.com/killercup/cargo-edit) - provides `cargo set-version` for bumping `Cargo.toml` versions. Install with `cargo install cargo-edit`.
+
 ###### Release procedure
 
-- Checkout `master` branch.
-- Make sure to fill the `CHANGELOG.md` and commit changes locally. It should start with a section named exactly `## Unreleased`, under which you list all the changes in this release.
-- Make sure there are no uncommitted changes.
-- Follow comments in the script `./scripts/release` on how to install dependencies for this script.
-- Run `./scripts/release <bump_type>`, where `bump_type` signifies by how much you want to increment the version. It should be one of: `major`, `minor`, `patch`, `rc`, `beta`, `alpha`. Note that `rc`, `beta` and `alpha` will make a prerelease, that is - marked as "prerelease" on GitHub Releases and not overwriting "latest" tags on DockerHub.
-- Verify the changes the script applied:
-  - versions are bumped in all `Cargo.toml` files (one at the root and one for each package) and the root`Cargo.lock` file.
-  - version is bumped in `package.json` file.
-  - a local commit created on branch `master` with a message containing the version number that you expect
-- The script will provide instructions on how to push the changes. You can push to `master`, or fast-forward either `staging` or `release` to `master` and then push to `staging` or `release`. A push to any of these branches will trigger CI deployment to the corresponding environment. Most often you push the release commit to all 3 major branches.
-- The script is not fool-proof and will break easily if you try. Don't!
+1. Checkout `master` branch. Make sure all changes intended for the release are already merged.
+
+2. Edit `CHANGELOG.md`: add a new section at the top named exactly `## Unreleased`, listing all user-visible changes in this release. Do **not** commit the changelog - the release script will include it in the release commit automatically. The script's dirty-check explicitly allows uncommitted `CHANGELOG.md` changes.
+
+3. Make sure there are no other uncommitted changes (the script will reject them).
+
+4. Run `./scripts/release <bump_type>`, where `bump_type` is one of: `major`, `minor`, `patch`, `rc`, `beta`, `alpha`. The `rc`, `beta` and `alpha` types create a prerelease (marked as "prerelease" on GitHub Releases and not overwriting "latest" tags on DockerHub).
+
+   The script will:
+   - Validate preconditions (clean working directory, correct branch, lockfile sync, `## Unreleased` section exists)
+   - Bump versions in all `Cargo.toml` files, `Cargo.lock`, and `package.json`
+   - Replace `## Unreleased` in `CHANGELOG.md` with the new version number
+   - Create a local commit `chore: release <version>` containing all of the above
+
+5. Verify the release commit: check that versions, changelog heading, and lockfiles look correct.
+
+6. Push to the target environments. Most often, push the release commit to all 3 major branches:
+
+   ```bash
+   git push origin master
+
+   git checkout staging
+   git merge --ff-only master
+   git push origin staging
+
+   git checkout release
+   git merge --ff-only master
+   git push origin release
+
+   git checkout master
+   ```
+
+   A push to any of these branches triggers CI deployment to the corresponding environment (see the [deployment environments table](#deployment-environments)).
+
+> ⚠️ The script is interactive and will ask for confirmation before proceeding. It is not fool-proof and will break easily if you try. Don't!
