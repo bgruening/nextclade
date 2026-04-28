@@ -1,3 +1,9 @@
+## 3.21.2
+
+### Fix: phylogenetic placement of sequences with large internal deletions
+
+Sequences with large internal deletions were placed near the root of the reference tree instead of near their true closest relatives. The nearest node distance metric treated node mutations at deleted positions as if the query had the reference allele, making the root appear closest because it has no mutations. Deleted positions are now treated as uninformative (like N) in the distance calculation, so they no longer bias placement toward or away from any node. See [#1765](https://github.com/nextstrain/nextclade/pull/1765).
+
 ## 3.21.1
 
 ### Fix: allow numeric keys in Auspice coloring scale
