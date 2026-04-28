@@ -1,6 +1,7 @@
 use crate::alphabet::nuc::Nuc;
 use crate::analyze::is_sequenced::is_nuc_sequenced;
 use crate::analyze::letter_ranges::NucRange;
+use crate::analyze::nuc_del::NucDelRange;
 use crate::analyze::nuc_sub::NucSub;
 use crate::coord::range::NucRefGlobalRange;
 use crate::graph::node::GraphNodeKey;
@@ -21,6 +22,7 @@ pub fn graph_find_nearest_nodes(
   graph: &AuspiceGraph,
   qry_nuc_subs: &[NucSub],
   qry_missing: &[NucRange],
+  qry_deletions: &[NucDelRange],
   aln_range: &NucRefGlobalRange,
 ) -> Result<Vec<TreePlacementInfo>, Report> {
   let masked_ranges = graph.data.meta.placement_mask_ranges();
@@ -29,7 +31,14 @@ pub fn graph_find_nearest_nodes(
   let nodes_by_placement_score = DftPre::new(graph.get_exactly_one_root()?, |node| graph.iter_children_of(node))
     .map(|(_, node)| {
       let node_payload = node.payload();
-      let distance = tree_calculate_node_distance(node_payload, qry_nuc_subs, qry_missing, aln_range, masked_ranges);
+      let distance = tree_calculate_node_distance(
+        node_payload,
+        qry_nuc_subs,
+        qry_missing,
+        qry_deletions,
+        aln_range,
+        masked_ranges,
+      );
       let prior = get_prior(node_payload);
       TreePlacementInfo {
         node_key: node.key(),
@@ -69,6 +78,7 @@ fn tree_calculate_node_distance(
   node: &AuspiceGraphNodePayload,
   qry_nuc_subs: &[NucSub],
   qry_missing: &[NucRange],
+  qry_deletions: &[NucDelRange],
   aln_range: &NucRefGlobalRange,
   masked_ranges: &[NucRefGlobalRange],
 ) -> i64 {
@@ -105,11 +115,13 @@ fn tree_calculate_node_distance(
     }
   }
 
-  // determine the number of sites that are mutated in the node but missing in seq.
+  // determine the number of sites that are mutated in the node but missing or deleted in seq.
   // for these we can't tell whether the node agrees with seq
   let mut undetermined_sites = 0_i64;
   for pos in node.tmp.substitutions.keys() {
-    if !is_nuc_sequenced(*pos, &masked_qry_missing, aln_range) {
+    if !is_nuc_sequenced(*pos, &masked_qry_missing, aln_range)
+      || qry_deletions.iter().any(|del| del.range().contains(*pos))
+    {
       undetermined_sites += 1;
     }
   }

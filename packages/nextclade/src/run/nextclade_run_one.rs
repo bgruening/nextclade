@@ -327,7 +327,8 @@ pub fn nextclade_run_one(
     nearest_node_name,
     nearest_nodes,
   } = if let Some(graph) = graph {
-    let nearest_node_candidates = graph_find_nearest_nodes(graph, &substitutions, &missing, &alignment_range)?;
+    let nearest_node_candidates =
+      graph_find_nearest_nodes(graph, &substitutions, &missing, &deletions, &alignment_range)?;
     let nearest_node_id = nearest_node_candidates[0].node_key;
     let nearest_node = graph.get_node(nearest_node_id)?.payload();
     let nearest_node_name = nearest_node.name.clone();
