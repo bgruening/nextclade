@@ -624,7 +624,7 @@ elif [ "${BUILD}" == "1" ]; then
   fi
   COMMAND="cargo build -q --target-dir='${BUILD_DIR_REL}' ${RUST_TARGET} ${RELEASE} ${PARAMS}"
 elif [ "${SMOKE_TEST}" == "1" ]; then
-  DEFAULT_BIN=".build/docker/release/nextclade"
+  DEFAULT_BIN=".out/nextclade"
   # Check if any non-flag argument (binary path) is provided
   HAS_BIN=false
   for arg in "${@}"; do
@@ -746,11 +746,15 @@ ${NICE} docker run --rm \
   "${DOCKER_REPO}:${DOCKER_TARGET}-${DOCKER_IMAGE_VERSION}" \
   bash -c "set -euo pipefail; ${HANDLE_SIGINT}; ${COMMAND} ${SUCCESS_OR_FAILURE}"
 
-if [ -n "${CROSS:-}" ] && [ -n "${RELEASE:-}" ] && { [ "${BUILD:-}" == 1 ] || [ "${RUN:-}" == 1 ]; }; then
+if [ -n "${RELEASE:-}" ] && { [ "${BUILD:-}" == 1 ] || [ "${RUN:-}" == 1 ]; }; then
   mkdir -p .out/
-  if [[ "${CROSS}" == *windows* ]]; then
-    cp "${BUILD_DIR}/${CROSS}/release/${PACKAGE_NAME}.exe" ".out/${PACKAGE_NAME}-${CROSS}.exe"
+  if [ -n "${CROSS:-}" ]; then
+    if [[ "${CROSS}" == *windows* ]]; then
+      cp "${BUILD_DIR}/${CROSS}/release/${PACKAGE_NAME}.exe" ".out/${PACKAGE_NAME}-${CROSS}.exe"
+    else
+      cp "${BUILD_DIR}/${CROSS}/release/${PACKAGE_NAME}" ".out/${PACKAGE_NAME}-${CROSS}"
+    fi
   else
-    cp "${BUILD_DIR}/${CROSS}/release/${PACKAGE_NAME}" ".out/${PACKAGE_NAME}-${CROSS}"
+    cp "${BUILD_DIR}/release/${PACKAGE_NAME}" ".out/${PACKAGE_NAME}"
   fi
 fi
