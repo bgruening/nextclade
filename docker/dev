@@ -137,6 +137,8 @@ fi
 export USER=user
 export GROUP=user
 
+WORKTREE_BUILD_DIRS=(node_modules target .build .cache)
+
 export BUILD_DIR_REL=".build/docker${CROSS:+-$CROSS}/${PACKAGE_DIR_REL}"
 export BUILD_DIR="$(abspath "${PACKAGE_DIR}/${BUILD_DIR_REL}")"
 export BUILD_DIR_TEST="${BUILD_DIR}/test"
@@ -693,15 +695,33 @@ else
   COMMAND="${NICE} ${TIME} ${COMMAND}"
 fi
 
-mkdir -p "${BUILD_DIR}" "${CACHE_DIR}/.cargo/"{install,registry}
+mkdir -p "${BUILD_DIR}"
 
+# Resolve build directory symlinks (worktrees symlink these back to main repo).
+# Mount each resolved path as a separate volume so the container sees real
+# directories instead of dangling symlinks.
+declare -A VOLUMES=()
+for dir in "${WORKTREE_BUILD_DIRS[@]}"; do
+  local_path="${PROJECT_ROOT_DIR}/${dir}"
+  if [[ -e "${local_path}" ]] || [[ -L "${local_path}" ]]; then
+    local_path=$(readlink -f "${local_path}")
+  fi
+  VOLUMES["${local_path}"]="/workdir/${dir}"
+done
+
+VOLUMES+=(
+  ["${CACHE_DIR}/.cargo/install"]="/home/${USER}/.cargo/install"
+  ["${CACHE_DIR}/.cargo/registry"]="/home/${USER}/.cargo/registry"
+)
+
+mkdir -p "${!VOLUMES[@]}"
 
 ADDITIONAL_DOCKER_RUN_ARGS=""
 if [ -t 0 ] && [ -t 1 ] && [ "$(is_ci)" == "0" ]; then
   ADDITIONAL_DOCKER_RUN_ARGS="${ADDITIONAL_DOCKER_RUN_ARGS} -it"
 fi
 
-# shellcheck disable=SC2086
+# shellcheck disable=SC2086,SC2046
 ${NICE} docker run --rm \
   ${ADDITIONAL_DOCKER_RUN_ARGS} \
   --init \
@@ -709,8 +729,7 @@ ${NICE} docker run --rm \
   --hostname="${DOCKER_IMAGE_NAME_SAFE}" \
   --user="$(id -u):$(id -g)" \
   --volume="${PROJECT_ROOT_DIR}:/workdir" \
-  --volume="${CACHE_DIR}/.cargo/install:/home/${USER}/.cargo/install" \
-  --volume="${CACHE_DIR}/.cargo/registry:/home/${USER}/.cargo/registry" \
+  $(for path in "${!VOLUMES[@]}"; do echo "--volume=${path}:${VOLUMES[${path}]}"; done) \
   --workdir="/workdir/${PACKAGE_DIR_REL}" \
   --env="UID=$(id -u)" \
   --env="GID=$(id -g)" \
