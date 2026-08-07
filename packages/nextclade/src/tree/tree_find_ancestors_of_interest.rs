@@ -16,7 +16,9 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AttrPair {
+  /// Clade-like attribute name
   pub key: String,
+  /// Attribute value on the matched node
   pub value: String,
 }
 
@@ -24,7 +26,9 @@ pub struct AttrPair {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AncestralSearchResult {
+  /// The search configuration this result corresponds to
   pub search: AuspiceRefNodeSearchDesc,
+  /// The matching criterion and node, absent if nothing matched
   #[serde(skip_serializing_if = "Option::is_none")]
   pub result: Option<AncestralSearchResultForCriteria>,
 }
@@ -33,8 +37,10 @@ pub struct AncestralSearchResult {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AncestralSearchResultForCriteria {
+  /// The search criterion that was evaluated
   pub criterion: AuspiceRefNodeSearchCriteria,
 
+  /// The matched reference node, absent if the criterion did not match
   #[serde(rename = "match")]
   #[schemars(rename = "match")]
   #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -45,12 +51,17 @@ pub struct AncestralSearchResultForCriteria {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AncestralSearchMatch {
+  /// Internal graph key of the matched node
   pub node_key: GraphNodeKey,
+  /// Name of the matched node on the reference tree
   pub node_name: String,
+  /// Node name that satisfied the match, if matched by name
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub name: Option<String>,
+  /// Clade value that satisfied the match, if matched by clade
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub clade: Option<String>,
+  /// Clade-like attribute values that satisfied the match, if matched by attributes
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub clade_like_attrs: Option<Vec<AttrPair>>,
 }

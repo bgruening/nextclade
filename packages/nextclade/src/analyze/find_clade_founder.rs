@@ -17,11 +17,17 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CladeNodeAttrFounderInfo {
+  /// Name of the clade-like attribute (e.g. "clade", "lineage")
   pub key: String,
+  /// Value of the attribute for which this founder was found
   pub value: String,
+  /// Internal graph key of the founder node
   pub node_key: GraphNodeKey,
+  /// Name of the founder node on the reference tree
   pub node_name: String,
+  /// Private nucleotide mutations relative to the founder node
   pub nuc_mutations: PrivateNucMutations,
+  /// Private amino acid mutations relative to the founder node, keyed by CDS name
   pub aa_mutations: BTreeMap<String, PrivateAaMutations>,
 }
 

@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Serialize, Deserialize, schemars::JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RelativeNucMutations {
+  /// The ancestral node search configuration and match result
   pub search: AncestralSearchResult,
+  /// Nucleotide mutations relative to the matched ancestor, absent if no ancestor was found
   #[serde(skip_serializing_if = "Option::is_none")]
   pub result: Option<RelativeNucMutationsResult>,
 }
@@ -21,8 +23,11 @@ pub struct RelativeNucMutations {
 #[derive(Clone, Serialize, Deserialize, schemars::JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RelativeNucMutationsResult {
+  /// The search criterion that matched this ancestor
   pub criterion: AuspiceRefNodeSearchCriteria,
+  /// The matched ancestor node
   pub r#match: AncestralSearchMatch,
+  /// Private nucleotide mutations relative to the ancestor
   pub muts: PrivateNucMutations,
 }
 
