@@ -7,10 +7,7 @@ import { ViewedDatasetSelector } from 'src/components/Main/ViewedDatasetSelector
 import { ResultsTableUnknownDataset } from 'src/components/Results/ResultsTableUnknownDataset'
 import { useEffectiveDataset } from 'src/hooks/useEffectiveDataset'
 import { useTranslationSafe } from 'src/helpers/useTranslationSafe'
-import {
-  hasMultipleDatasetsForAnalysisAtom,
-  isViewedDatasetUnknownAtom,
-} from 'src/state/dataset.state'
+import { hasMultipleDatasetsForAnalysisAtom, isViewedDatasetUnknownAtom } from 'src/state/dataset.state'
 import styled from 'styled-components'
 import { resultsTableTotalWidthAtom } from 'src/state/settings.state'
 import { Layout } from 'src/components/Layout/Layout'

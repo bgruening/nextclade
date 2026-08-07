@@ -19,7 +19,12 @@ export interface ResultsTableRowPendingProps {
   columnWidthsPx: Record<keyof typeof COLUMN_WIDTHS, string>
 }
 
-export function ResultsTableRowPending({ rowIndex, seqIndex, columnWidthsPx, ...restProps }: ResultsTableRowPendingProps) {
+export function ResultsTableRowPending({
+  rowIndex,
+  seqIndex,
+  columnWidthsPx,
+  ...restProps
+}: ResultsTableRowPendingProps) {
   const { t } = useTranslationSafe()
   const text = useMemo(() => t('Analyzing...'), [t])
   const { seqName } = useAtomValue(analysisResultAtom(seqIndex))

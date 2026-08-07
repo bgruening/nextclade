@@ -119,7 +119,9 @@ export function TeamCredits() {
         <Row noGutters>
           <Col>
             <p className="text-center">
-              {'This resource is supported in part by the National Institute Of Allergy And Infectious Diseases of the National Institutes of Health under grant n\u00B0'}
+              {
+                'This resource is supported in part by the National Institute Of Allergy And Infectious Diseases of the National Institutes of Health under grant n\u00B0'
+              }
               <LinkExternal href="https://pathogendatanetwork.org/">
                 {'U24AI183840 - Pathogen Data Network'}
               </LinkExternal>
