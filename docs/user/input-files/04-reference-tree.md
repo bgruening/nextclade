@@ -126,14 +126,13 @@ Add object under `.meta.extensions.nextclade.ref_nodes`:
 
 Properties:
 
-- `default`: string, optional. Set default search to display in the Nextclade Web dropdown. Should correspond to one of the `search[].name` fields or one of the special values `__root__` for reference sequence (default), `__parent__` for nearest node (private mutations), `__clade_founder__` for founder of the clade.
+- `default`: string, optional. The entry pre-selected in the Nextclade Web "Relative to" dropdown. Must be one of the `search[].name` values or a built-in id: `__root__` for the reference sequence (this is the default), `__parent__` for the nearest node (private mutations), or `__clade_founder__` for the founder of the clade. Any other value is ignored and falls back to `__root__`. Note that the attribute founder entries (`__founder_of_<attribute>__`) cannot be used here.
 
 - `search`: array of objects, optional. Each object describes one search. Each search corresponds to an entry in the "Relative to" dropdown in the web app and a set of CSV/TSV columns `relativeMutations['searchName']`. Note that these names no longer need to correspond to node names.
   - `search[].name`: required unique identifier of the search entry
   - `search[].displayName`, `search.description`: optional friendly name and description to be displayed in the UI (dropdown)
   - `search[].criteria`: array of objects, optional. One or multiple search criteria. Criteria should be described such that during search run only one criterion matches a pair of query and node. If there are multiple matches, then one (unspecified) match is taken and a warning is emitted.
-    - `search[].criteria[].qry`: array of objects, optional. Each object describes properties of query samples to select for this search.
-      - `search[].criteria[].qry[].name`: array of strings, optional. Query sequence names to consider for this search. At least one match is necessary for sample to match.
+    - `search[].criteria[].qry`: array of objects, optional. Each object describes which query samples this search applies to (matched against the sample's placement node on the reference tree). Leave empty to apply to every sample. Only `clade` and `cladeNodeAttrs` are used for query matching; `name` is not considered here.
       - `search[].criteria[].qry[].clade`: array of strings, optional. Query clades to consider for this search. At least one match is necessary for sample to match.
       - `search[].criteria[].qry[].cladeNodeAttrs`: optional mapping from name of the clade-like attr to a list of searched values for this attr. At least one match is necessary for sample to match.
     - `search[].criteria[].node`: array of objects, optional. Each object describes properties of ref node to search, as well as search algorithm. All of the properties should match.
@@ -144,3 +143,23 @@ Properties:
         - `full` (default): simple loop over all nodes until first match is found
         - `ancestor-earliest`: start with the current sample and traverse the graph against edge directions, looking for matching nodes, until it reaches root node. The result is the last encountered matching node.
         - `ancestor-nearest`: start with the current sample and traverse the graph against edge directions, looking for matching nodes. The first match is the result.
+
+- `builtins`: object, optional. Overrides the label and tooltip of the three built-in dropdown entries. This is a display-only change: it does not affect alignment, mutation calling, or which nodes are used. Keys are the built-in ids; each value is an object with optional `displayName` (dropdown label) and `description` (tooltip). Omit a key, or either sub-field, to keep the default.
+  - `__root__`: the reference sequence. Defaults: `displayName` "Reference", `description` "Reference sequence".
+  - `__parent__`: the nearest node on the reference tree. Defaults: `displayName` "Parent", `description` "Nearest node on reference tree".
+  - `__clade_founder__`: the founder of the clade. Defaults: `displayName` "Clade founder", `description` "Earliest ancestor node with the same clade on reference tree".
+
+  A common use is relabeling `__root__` when the reference sequence is an inferred ancestor rather than a named strain:
+
+  ```json
+  {
+    "ref_nodes": {
+      "builtins": {
+        "__root__": {
+          "displayName": "Static Inferred Ancestor",
+          "description": "Precomputed ancestral sequence (static)"
+        }
+      }
+    }
+  }
+  ```
