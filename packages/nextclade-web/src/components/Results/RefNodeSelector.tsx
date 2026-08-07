@@ -2,6 +2,7 @@
 import { rgba } from 'polished'
 import React, { useCallback, useMemo } from 'react'
 import { getCladeNodeAttrFounderSearchId } from 'src/helpers/relativeMuts'
+import { resolveRefNodeIds } from 'src/helpers/refNodeDropdown'
 import { useTranslationSafe } from 'src/helpers/useTranslationSafe'
 import { viewedDatasetNameAtom } from 'src/state/dataset.state'
 import styled from 'styled-components'
@@ -81,11 +82,19 @@ export function RefNodeSelector({ disabled }: RefNodeSelectorProps) {
       },
     ]
 
-    const options = [...builtinRefs, ...cladeNodeAttrFounders, ...refs]
+    // Order and hide entries per the dataset's `ref_nodes.order`, using the shared resolver so the rendered set
+    // matches the preselection in `useRunAnalysis`. Ids resolve to their built label; absent `order` keeps the
+    // default order.
+    const optionById = new Map<string, Option>(
+      [...builtinRefs, ...cladeNodeAttrFounders, ...refs].map((option) => [option.value, option]),
+    )
+    const options = resolveRefNodeIds(refNodes, cladeNodeAttrDescs)
+      .map((id) => optionById.get(id))
+      .filter((option): option is Option => option !== undefined)
     const currentOption = options.find((o) => o.value === currentRefNodeName)
 
     return { options, currentOption }
-  }, [cladeNodeAttrDescs, currentRefNodeName, refNodes?.search, refNodes?.builtins, t])
+  }, [cladeNodeAttrDescs, currentRefNodeName, refNodes, t])
 
   const handleChange = useCallback(
     (option: OnChangeValue<DropdownOption<string>, IsMultiValue>, _actionMeta: ActionMeta<DropdownOption<string>>) => {

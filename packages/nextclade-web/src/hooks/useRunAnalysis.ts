@@ -6,7 +6,8 @@ import { useRouter } from 'next/router'
 import { useRecoilCallback } from 'recoil'
 import { useSetAtom } from 'jotai'
 import { useRef } from 'react'
-import { REF_NODE_CLADE_FOUNDER, REF_NODE_PARENT, REF_NODE_ROOT } from 'src/constants'
+import { REF_NODE_ROOT } from 'src/constants'
+import { resolveRefNodeIds } from 'src/helpers/refNodeDropdown'
 import { ErrorInternal } from 'src/helpers/ErrorInternal'
 import {
   seqIndexToTopDatasetNameAtom,
@@ -143,13 +144,15 @@ export function useRunAnalysis() {
             set(phenotypeAttrDescsAtom({ datasetName }), phenotypeAttrDescs)
             set(refNodesAtom({ datasetName }), refNodes)
 
-            const searchNames = (refNodes.search ?? []).map((s) => s.name)
-            const defaultSearchName =
-              !isNil(refNodes.default) &&
-              [...searchNames, REF_NODE_ROOT, REF_NODE_PARENT, REF_NODE_CLADE_FOUNDER].includes(refNodes.default)
+            // Preselect the "Relative to" entry among the resolved visible entries (order/hide aware): the
+            // configured `default` if it is still visible, else the reference sequence if visible, else the
+            // first visible entry. `default` stays orthogonal to ordering.
+            const visibleRefNodeIds = resolveRefNodeIds(refNodes, cladeNodeAttrKeyDescs)
+            const preselectedRefNode =
+              !isNil(refNodes.default) && visibleRefNodeIds.includes(refNodes.default)
                 ? refNodes.default
-                : REF_NODE_ROOT
-            set(currentRefNodeNameAtom({ datasetName }), defaultSearchName)
+                : (visibleRefNodeIds.find((id) => id === REF_NODE_ROOT) ?? visibleRefNodeIds[0] ?? REF_NODE_ROOT)
+            set(currentRefNodeNameAtom({ datasetName }), preselectedRefNode)
 
             set(aaMotifsDescsAtom({ datasetName }), aaMotifsDescs)
             set(csvColumnConfigAtom, csvColumnConfigDefault)
