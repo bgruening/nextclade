@@ -993,6 +993,12 @@ definitions:
         __root__:
           displayName: Reference
           description: Reference sequence
+      order:
+        entries:
+        - Vaccine strain
+        - __root__
+        - __attr_founders__
+        others: hide
     type: object
     properties:
       default:
@@ -1009,6 +1015,11 @@ definitions:
         description: Optional label and tooltip overrides for the three built-in entries (`__root__`, `__parent__`, `__clade_founder__`). Display-only; omit to keep the defaults.
         anyOf:
         - $ref: '#/definitions/AuspiceRefNodeBuiltinsConfig'
+        - type: 'null'
+      order:
+        description: 'Optional ordering and hiding of entries in the Nextclade Web "Relative to" dropdown. This is a display setting for the web app only: it does not change alignment, mutation calling, the CSV/TSV/JSON outputs, or the CLI. Omit to keep the default order. See `AuspiceRefNodesOrder`.'
+        anyOf:
+        - $ref: '#/definitions/AuspiceRefNodesOrder'
         - type: 'null'
   AuspiceRefNodeSearchDesc:
     description: Describes criteria for selecting a reference node for the "Relative to" feature. Each entry corresponds to one custom option in the "Relative to" dropdown and a set of `relativeMutations['<name>']` columns in the CSV/TSV outputs.
@@ -1157,6 +1168,34 @@ definitions:
         type:
         - string
         - 'null'
+  AuspiceRefNodesOrder:
+    description: |-
+      Ordering and visibility of entries in the Nextclade Web "Relative to" dropdown, under `.meta.extensions.nextclade.ref_nodes.order`. This is a web display setting only: `others: "hide"` removes an entry from the dropdown, not from the CSV/TSV/JSON outputs, and the CLI never reads this field. To remove an entry from the outputs and computation entirely, use `skipAsReference` on a clade-like attribute (drops its founder everywhere) or leave a custom node out of `search`.
+
+      Each string in `entries` is an entry id: a built-in (`__root__`, `__parent__`, `__clade_founder__`), a custom `search` entry's `name`, or the group token `__attr_founders__`. `__attr_founders__` expands in place to all per-attribute founder entries (one per clade-like attribute; see `clade_node_attrs`). Attribute founders are positioned only through this token: an individual `__founder_of_<attribute>__` id written in `entries` is not recognized and is ignored. An id that names no entry (for example a `search` name absent from the tree) is also ignored. Each entry appears at most once, in the order it is first placed.
+    type: object
+    properties:
+      entries:
+        description: Entry ids in the order they should appear, top to bottom. Ids not listed are handled per `others`.
+        type: array
+        items:
+          type: string
+      others:
+        description: 'What to do with entries not named in `entries`: keep them (append in default order) or hide them from the dropdown. Defaults to `keep`.'
+        default: keep
+        allOf:
+        - $ref: '#/definitions/RefNodesOrderOthers'
+  RefNodesOrderOthers:
+    description: Disposition of "Relative to" dropdown entries not named in the `order.entries` list.
+    oneOf:
+    - description: Append unlisted entries after the listed ones, in the default order. This is the default.
+      type: string
+      enum:
+      - keep
+    - description: 'Remove unlisted entries from the dropdown (whitelist mode: only listed entries are shown).'
+      type: string
+      enum:
+      - hide
   AncestralSearchResult:
     description: Represents the result of searching for ancestral nodes of interest in the graph
     type: object
