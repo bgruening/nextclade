@@ -11,6 +11,7 @@ use crate::graph::node::{GraphNode, Node};
 use crate::graph::traits::{HasDivergence, HasName};
 use crate::io::fs::read_file_to_string;
 use crate::io::json::json_parse;
+use crate::{o, vec_of_owned};
 use eyre::{Report, WrapErr, eyre};
 use log::warn;
 use schemars::JsonSchema;
@@ -382,15 +383,16 @@ impl AuspiceTreeNode {
 pub struct CladeNodeAttrKeyDesc {
   /// Machine-readable identifier, must match the key used in node_attrs on tree nodes
   pub name: String,
-  /// Human-readable label displayed in the UI
+  /// Label shown in the results-table column header and in the "Relative to" dropdown (as "'<label>' founder")
   pub display_name: String,
   /// Tooltip text describing the attribute
   #[serde(skip_serializing_if = "Option::is_none")]
   pub description: Option<String>,
-  /// Exclude this attribute's column from Nextclade Web results table
+  /// Hide this attribute's column from the Nextclade Web results table (it is still computed and written to outputs)
   #[serde(default)]
   pub hide_in_web: bool,
-  /// Exclude this attribute from clade founder node search and relative mutation calculation
+  /// If true, this attribute gets no "founder" entry in the "Relative to" dropdown and no `founderMuts` output.
+  /// Set it for labels that are not phylogenetically nested (e.g. free-form annotations), where an ancestor founder is not meaningful.
   #[serde(default)]
   pub skip_as_reference: bool,
   #[serde(flatten)]
@@ -401,11 +403,14 @@ pub struct CladeNodeAttrKeyDesc {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Copy, Eq, PartialEq, schemars::JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum AuspiceNodeSearchAlgo {
-  /// Traverse from the query node toward the root, return the first (nearest) match
+  /// Walk from the sample's placement toward the root and stop at the first (nearest) matching node.
+  /// Use to compare against the closest matching ancestor.
   AncestorNearest,
-  /// Traverse from the query node toward the root, return the last (earliest/deepest) match
+  /// Walk from the sample's placement toward the root and keep the last (deepest, closest to root) matching node.
+  /// Use to compare against the origin of a lineage the sample belongs to.
   AncestorEarliest,
-  /// Linear search over all tree nodes until the first match
+  /// Scan the whole tree and take the first matching node, regardless of ancestry.
+  /// Use for a fixed node such as a named reference strain. This is the default.
   #[default]
   Full,
 }
@@ -414,7 +419,8 @@ pub enum AuspiceNodeSearchAlgo {
 #[derive(Clone, Default, Serialize, Deserialize, Eq, PartialEq, schemars::JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AuspiceRefNodeCriterion {
-  /// Search algorithm to use when traversing the tree
+  /// How to locate the node: `full` scans the whole tree (use for a fixed strain), `ancestor-nearest` and
+  /// `ancestor-earliest` walk from the sample toward the root. Defaults to `full`.
   #[serde(default)]
   pub search_algo: AuspiceNodeSearchAlgo,
 
@@ -430,18 +436,22 @@ impl AuspiceRefNodeCriterion {
 }
 
 /// Conditions for matching a tree node by name, clade, or clade-like attributes.
+/// A node matches if any one of the specified conditions matches.
 #[derive(Clone, Default, Serialize, Deserialize, Eq, PartialEq, schemars::JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AuspiceNodeCriterion {
-  /// Node names to match (at least one must match)
+  /// Match a node whose name is one of these (any one matches). Used when locating a node (in `node`);
+  /// ignored in query conditions (`qry`), where the sample's placement node name is not meaningful.
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub name: Vec<String>,
 
-  /// Clade values to match (at least one must match)
+  /// Match by clade, any one matches. In `node` this is the candidate node's clade; in `qry` it is the
+  /// clade of the sample's nearest node on the reference tree.
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub clade: Vec<String>,
 
-  /// Clade-like attribute values to match, keyed by attribute name. Each key requires at least one value match.
+  /// Match by clade-like attributes, e.g. `{ "lineage": ["BA.2", "BA.2.86"] }`. All listed keys must be
+  /// present, and each key matches if any one of its values matches.
   #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
   pub clade_node_attrs: BTreeMap<String, Vec<String>>,
 
@@ -459,11 +469,12 @@ impl AuspiceNodeCriterion {
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, schemars::JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AuspiceRefNodeSearchCriteria {
-  /// Conditions the query sequence must satisfy for this criterion to apply
+  /// Which samples this criterion applies to, matched against each sample's nearest node on the reference tree.
+  /// Leave empty to apply to all samples. Only `clade` and `cladeNodeAttrs` are used here (`name` is ignored).
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub qry: Vec<AuspiceNodeCriterion>,
 
-  /// Conditions and search algorithm for finding the matching reference node
+  /// How to find the reference node to compare against: match by `name`, `clade`, or `cladeNodeAttrs`, using `searchAlgo`.
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub node: Vec<AuspiceRefNodeCriterion>,
 
@@ -472,21 +483,27 @@ pub struct AuspiceRefNodeSearchCriteria {
 }
 
 /// Describes criteria for selecting a reference node for the "Relative to" feature.
+/// Each entry corresponds to one custom option in the "Relative to" dropdown and a set of
+/// `relativeMutations['<name>']` columns in the CSV/TSV outputs.
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, schemars::JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
+#[schemars(example = "AuspiceRefNodeSearchDesc::example")]
 pub struct AuspiceRefNodeSearchDesc {
-  /// Unique identifier for this search entry
+  /// Unique id for this entry. Use it as the value of `default`, and it becomes the key in the
+  /// `relativeMutations['<name>']` output columns. It does not need to match any node name.
   pub name: String,
 
-  /// Human-readable label for the UI dropdown
+  /// Label shown in the "Relative to" dropdown. Falls back to `name` if omitted.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub display_name: Option<String>,
 
-  /// Tooltip text describing when this reference node applies
+  /// Tooltip shown under the dropdown label.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub description: Option<String>,
 
-  /// Match criteria (OR logic between elements). Each criterion pairs query conditions with node conditions.
+  /// One or more criteria, evaluated in order; the first whose `qry` matches the sample and whose `node`
+  /// is found on the tree wins. Use several to compare different samples against different nodes
+  /// (for example, one reference node per clade).
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub criteria: Vec<AuspiceRefNodeSearchCriteria>,
 
@@ -498,29 +515,34 @@ pub struct AuspiceRefNodeSearchDesc {
 #[derive(Clone, Default, Serialize, Deserialize, Eq, PartialEq, schemars::JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AuspiceRefNodeBuiltinConfig {
-  /// Override display name for this built-in reference node type
+  /// Replacement dropdown label. Omit to keep the built-in default.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub display_name: Option<String>,
 
-  /// Override description for this built-in reference node type
+  /// Replacement tooltip. Omit to keep the built-in default.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub description: Option<String>,
 }
 
-/// Display name and description overrides for all built-in reference node types.
+/// Label and tooltip overrides for the three always-present "Relative to" entries, keyed by their special ids.
+/// These same ids (`__root__`, `__parent__`, `__clade_founder__`) can also be used as the value of `default`.
+/// Overriding here only changes how an entry is labeled; it never changes what it compares against.
 #[derive(Clone, Default, Serialize, Deserialize, Eq, PartialEq, schemars::JsonSchema, Debug)]
 pub struct AuspiceRefNodeBuiltinsConfig {
-  /// Config for the root reference node (reference sequence)
+  /// The reference-sequence entry, id `__root__`: the alignment reference and tree root that mutations are
+  /// called against by default. Default label "Reference", tooltip "Reference sequence".
   #[serde(skip_serializing_if = "Option::is_none")]
   #[serde(rename = "__root__")]
   pub root: Option<AuspiceRefNodeBuiltinConfig>,
 
-  /// Config for the parent (nearest) reference node
+  /// The nearest-node entry, id `__parent__`: shows private mutations relative to the sample's nearest node
+  /// on the reference tree. Default label "Parent", tooltip "Nearest node on reference tree".
   #[serde(skip_serializing_if = "Option::is_none")]
   #[serde(rename = "__parent__")]
   pub parent: Option<AuspiceRefNodeBuiltinConfig>,
 
-  /// Config for the clade founder reference node
+  /// The clade-founder entry, id `__clade_founder__`: shows mutations since the founder of the sample's clade.
+  /// Default label "Clade founder", tooltip "Earliest ancestor node with the same clade on reference tree".
   #[serde(skip_serializing_if = "Option::is_none")]
   #[serde(rename = "__clade_founder__")]
   pub clade_founder: Option<AuspiceRefNodeBuiltinConfig>,
@@ -533,21 +555,60 @@ impl AuspiceRefNodeSearchDesc {
   pub fn display_name_or_name(&self) -> &str {
     self.display_name.as_ref().unwrap_or(&self.name)
   }
+
+  pub fn example() -> Self {
+    Self {
+      name: o!("Vaccine strain"),
+      display_name: Some(o!("Vaccine strain (JN.1)")),
+      description: Some(o!("Show mutations relative to the recommended vaccine strain")),
+      criteria: vec![AuspiceRefNodeSearchCriteria {
+        qry: vec![AuspiceNodeCriterion {
+          name: vec![],
+          clade: vec_of_owned!["24A", "24B", "24C"],
+          clade_node_attrs: BTreeMap::new(),
+          other: json!({}),
+        }],
+        node: vec![AuspiceRefNodeCriterion {
+          search_algo: AuspiceNodeSearchAlgo::Full,
+          criterion: AuspiceNodeCriterion {
+            name: vec_of_owned!["JN.1"],
+            clade: vec![],
+            clade_node_attrs: BTreeMap::new(),
+            other: json!({}),
+          },
+        }],
+        other: json!({}),
+      }],
+      other: json!({}),
+    }
+  }
 }
 
-/// Describes search criteria in the reference tree nodes. This is used for "Relative to" feature where you can switch mutation calling source node between "reference", "parent", "clade founder" and custom nodes described using this format.
+/// Configuration for the "Relative to" feature, placed under `.meta.extensions.nextclade.ref_nodes`
+/// in the reference tree. It controls which nodes the mutations can be shown relative to.
+///
+/// Every dropdown entry has an id, used by `default` and in the outputs:
+/// the built-ins `__root__` (reference sequence), `__parent__` (nearest node) and `__clade_founder__`
+/// (clade founder); one `__founder_of_<attribute>__` per clade-like attribute (see `clade_node_attrs`);
+/// and one per custom `search` entry, referred to by its `name`.
 #[derive(Clone, Default, Serialize, Deserialize, Eq, PartialEq, schemars::JsonSchema, Debug)]
 #[serde(rename_all = "camelCase")]
+#[schemars(example = "AuspiceRefNodesDesc::example")]
 pub struct AuspiceRefNodesDesc {
-  /// Name of the default reference node to display. One of the `search[].name` values or a built-in: "__root__", "__parent__", "__clade_founder__".
+  /// Entry pre-selected in the "Relative to" dropdown. Must be one of the `search[].name` values or a
+  /// built-in id: `__root__` (reference sequence, the default), `__parent__` (nearest node), or
+  /// `__clade_founder__` (clade founder). Any other value is ignored and falls back to `__root__`.
+  /// Attribute founder entries (`__founder_of_<attribute>__`) cannot be used here.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub default: Option<String>,
 
-  /// Custom reference node search descriptions, each corresponding to an entry in the "Relative to" dropdown
+  /// Custom reference nodes to compare against. Each entry adds one option to the "Relative to" dropdown
+  /// (and a set of `relativeMutations['<name>']` output columns), located on the reference tree via its `criteria`.
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub search: Vec<AuspiceRefNodeSearchDesc>,
 
-  /// Display name and description overrides for built-in reference node types (root, parent, clade founder)
+  /// Optional label and tooltip overrides for the three built-in entries (`__root__`, `__parent__`,
+  /// `__clade_founder__`). Display-only; omit to keep the defaults.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub builtins: Option<AuspiceRefNodeBuiltinsConfig>,
 
@@ -558,6 +619,23 @@ pub struct AuspiceRefNodesDesc {
 impl AuspiceRefNodesDesc {
   pub fn is_empty(&self) -> bool {
     self == &Self::default()
+  }
+
+  pub fn example() -> Self {
+    Self {
+      default: Some(o!("Vaccine strain")),
+      search: vec![AuspiceRefNodeSearchDesc::example()],
+      builtins: Some(AuspiceRefNodeBuiltinsConfig {
+        root: Some(AuspiceRefNodeBuiltinConfig {
+          display_name: Some(o!("Reference")),
+          description: Some(o!("Reference sequence")),
+        }),
+        parent: None,
+        clade_founder: None,
+        other: json!({}),
+      }),
+      other: json!({}),
+    }
   }
 }
 
