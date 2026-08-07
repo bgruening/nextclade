@@ -24,6 +24,11 @@ export const REF_NODE_ROOT = '__root__' as const
 export const REF_NODE_PARENT = '__parent__' as const
 export const REF_NODE_CLADE_FOUNDER = '__clade_founder__' as const
 
+// Group token usable in `ref_nodes.order.entries`. Expands to all per-attribute founder entries
+// (`__founder_of_<attr>__`). Attribute founders are positioned only through this token; an individual
+// `__founder_of_<attr>__` id written in `entries` is not recognized.
+export const REF_NODE_ATTR_FOUNDERS_GROUP = '__attr_founders__' as const
+
 export const URL_GITHUB = 'https://github.com/nextstrain/nextclade' as const
 export const URL_GITHUB_FRIENDLY = 'github.com/nextstrain/nextclade' as const
 
