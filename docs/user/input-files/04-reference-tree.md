@@ -163,3 +163,49 @@ Properties:
     }
   }
   ```
+
+- `order`: object, optional. Sets the order of entries in the Nextclade Web "Relative to" dropdown, and optionally hides some of them. This is a display setting for the web app only: it does not change alignment, mutation calling, the CSV/TSV/JSON outputs, or the command-line tool. Omit `order` to keep the default order. To remove an entry from the outputs and computation entirely (not just the dropdown), use `skipAsReference` on a clade-like attribute, or leave a custom node out of `search`; see below.
+  - `order.entries`: array of strings, optional. Entry ids in the order you want them shown, top to bottom. Each id is a built-in (`__root__`, `__parent__`, `__clade_founder__`), a `search` entry's `name`, or the group token `__attr_founders__`.
+  - `order.others`: string, optional, one of `keep` (default) or `hide`. What to do with entries you did not list in `entries`: `keep` appends them after the listed ones in the default order; `hide` removes them from the dropdown (so `entries` becomes a whitelist).
+
+  The group token `__attr_founders__` stands for all attribute founder entries (one per clade-like attribute; see [clade-like attributes](#clade-like-attributes) above). It expands in place to those entries, in their natural order. Attribute founders can be positioned only through this token: an individual `__founder_of_<attribute>__` id written in `entries` is ignored, as is any id that does not name an existing entry. Each entry appears at most once.
+
+  If `others` is `hide` and it removes the entry that `default` points at, the dropdown preselects the reference sequence (or, if that too is hidden, the first remaining entry). `default` still controls which entry is preselected, not its position.
+
+  Show a custom entry first, then the reference; keep the rest in the default order:
+
+  ```json
+  {
+    "ref_nodes": {
+      "order": {
+        "entries": ["Fermon"]
+      }
+    }
+  }
+  ```
+
+  Show only the custom entry and the reference, hiding everything else, including the attribute founders:
+
+  ```json
+  {
+    "ref_nodes": {
+      "order": {
+        "entries": ["Fermon", "__root__"],
+        "others": "hide"
+      }
+    }
+  }
+  ```
+
+  Full explicit layout using the group token, keeping the attribute founders visible:
+
+  ```json
+  {
+    "ref_nodes": {
+      "order": {
+        "entries": ["Fermon", "__root__", "__attr_founders__"],
+        "others": "hide"
+      }
+    }
+  }
+  ```
