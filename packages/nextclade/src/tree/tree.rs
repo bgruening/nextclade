@@ -612,6 +612,12 @@ pub struct AuspiceRefNodesDesc {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub builtins: Option<AuspiceRefNodeBuiltinsConfig>,
 
+  /// Optional ordering and hiding of entries in the Nextclade Web "Relative to" dropdown. This is a display
+  /// setting for the web app only: it does not change alignment, mutation calling, the CSV/TSV/JSON outputs, or
+  /// the CLI. Omit to keep the default order. See `AuspiceRefNodesOrder`.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub order: Option<AuspiceRefNodesOrder>,
+
   #[serde(flatten)]
   pub other: serde_json::Value,
 }
@@ -634,9 +640,49 @@ impl AuspiceRefNodesDesc {
         clade_founder: None,
         other: json!({}),
       }),
+      order: Some(AuspiceRefNodesOrder {
+        entries: vec_of_owned!["Vaccine strain", "__root__", "__attr_founders__"],
+        others: RefNodesOrderOthers::Hide,
+      }),
       other: json!({}),
     }
   }
+}
+
+/// Ordering and visibility of entries in the Nextclade Web "Relative to" dropdown, under
+/// `.meta.extensions.nextclade.ref_nodes.order`. This is a web display setting only: `others: "hide"` removes an
+/// entry from the dropdown, not from the CSV/TSV/JSON outputs, and the CLI never reads this field. To remove an
+/// entry from the outputs and computation entirely, use `skipAsReference` on a clade-like attribute (drops its
+/// founder everywhere) or leave a custom node out of `search`.
+///
+/// Each string in `entries` is an entry id: a built-in (`__root__`, `__parent__`, `__clade_founder__`), a custom
+/// `search` entry's `name`, or the group token `__attr_founders__`. `__attr_founders__` expands in place to all
+/// per-attribute founder entries (one per clade-like attribute; see `clade_node_attrs`). Attribute founders are
+/// positioned only through this token: an individual `__founder_of_<attribute>__` id written in `entries` is not
+/// recognized and is ignored. An id that names no entry (for example a `search` name absent from the tree) is
+/// also ignored. Each entry appears at most once, in the order it is first placed.
+#[derive(Clone, Default, Serialize, Deserialize, Eq, PartialEq, schemars::JsonSchema, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AuspiceRefNodesOrder {
+  /// Entry ids in the order they should appear, top to bottom. Ids not listed are handled per `others`.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  pub entries: Vec<String>,
+
+  /// What to do with entries not named in `entries`: keep them (append in default order) or hide them from the
+  /// dropdown. Defaults to `keep`.
+  #[serde(default)]
+  pub others: RefNodesOrderOthers,
+}
+
+/// Disposition of "Relative to" dropdown entries not named in the `order.entries` list.
+#[derive(Clone, Copy, Default, Serialize, Deserialize, Eq, PartialEq, schemars::JsonSchema, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum RefNodesOrderOthers {
+  /// Append unlisted entries after the listed ones, in the default order. This is the default.
+  #[default]
+  Keep,
+  /// Remove unlisted entries from the dropdown (whitelist mode: only listed entries are shown).
+  Hide,
 }
 
 /// Nextclade extensions to Auspice JSON format.
@@ -1018,4 +1064,50 @@ pub fn check_ref_seq_mismatch(
   }
 
   Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::io::json::json_parse;
+  use pretty_assertions::assert_eq;
+
+  // Absent `order` must be a strict no-op: it deserializes and re-serializes with no `order` key, so existing
+  // datasets round-trip unchanged (back-compat).
+  #[test]
+  fn test_tree_ref_nodes_order_absent_is_no_op() -> Result<(), Report> {
+    let desc: AuspiceRefNodesDesc = json_parse(r#"{ "default": "__root__" }"#)?;
+    assert_eq!(None, desc.order);
+    let value = serde_json::to_value(&desc)?;
+    assert_eq!(None, value.get("order"));
+    Ok(())
+  }
+
+  #[test]
+  fn test_tree_ref_nodes_order_roundtrip() -> Result<(), Report> {
+    let desc: AuspiceRefNodesDesc =
+      json_parse(r#"{ "order": { "entries": ["Fermon", "__root__"], "others": "hide" } }"#)?;
+    let expected = AuspiceRefNodesOrder {
+      entries: vec_of_owned!["Fermon", "__root__"],
+      others: RefNodesOrderOthers::Hide,
+    };
+    assert_eq!(Some(expected), desc.order);
+
+    let value = serde_json::to_value(&desc)?;
+    assert_eq!(
+      &json!({ "entries": ["Fermon", "__root__"], "others": "hide" }),
+      value.get("order").unwrap()
+    );
+    Ok(())
+  }
+
+  // `others` is optional and defaults to `Keep` (Rust `Default`), so an author may write only `entries`.
+  #[test]
+  fn test_tree_ref_nodes_order_others_defaults_keep() -> Result<(), Report> {
+    let desc: AuspiceRefNodesDesc = json_parse(r#"{ "order": { "entries": ["Fermon"] } }"#)?;
+    let order = desc.order.unwrap();
+    assert_eq!(RefNodesOrderOthers::Keep, order.others);
+    assert_eq!(vec_of_owned!["Fermon"], order.entries);
+    Ok(())
+  }
 }
