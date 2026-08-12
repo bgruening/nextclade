@@ -1,3 +1,21 @@
+## 3.22.0
+
+### Nextclade Web: configurable Relative-to dropdown ordering
+
+Dataset authors can now control the order and visibility of entries in the Nextclade Web "Relative to" dropdown via a new `ref_nodes.order` object in the reference tree JSON. This is a display-only setting and does not affect CLI output. See [reference tree documentation](https://docs.nextstrain.org/projects/nextclade/en/stable/user/input-files/04-reference-tree.html), [#1779](https://github.com/nextstrain/nextclade/pull/1779).
+
+### Fix: version comparison for dataset and minimizer index selection
+
+Schema and algorithm versions were compared as strings, causing incorrect ordering when version components exceeded single digits (e.g. `3.10.0` sorted before `3.9.0`). Datasets or minimizer indexes could be rejected, mis-sorted, or silently downgraded. Version comparison now uses numeric parsing. See [#1769](https://github.com/nextstrain/nextclade/pull/1769).
+
+### Fix: web update notification version check
+
+The update-available notification in Nextclade Web compared version strings lexicographically, which could suppress or falsely trigger the update banner when version numbers crossed single-digit boundaries. The comparison now uses semver. See [#1770](https://github.com/nextstrain/nextclade/pull/1770).
+
+### CI: GitHub Actions Node.js runtime update
+
+GitHub Actions workflows now use the current Node.js runtime, replacing the deprecated Node 20 runtime. See [#1775](https://github.com/nextstrain/nextclade/pull/1775).
+
 ## 3.21.2
 
 ### Fix: phylogenetic placement of sequences with large internal deletions
