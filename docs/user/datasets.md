@@ -30,6 +30,12 @@ For in-depth documentation of the input files, see: [Input files](input-files/in
 
 An instance of a dataset is a directory containing the dataset files or an equivalent zip archive.
 
+### Multi-reference datasets
+
+By default, Nextclade builds its dataset detection fingerprint from the single reference sequence (`reference.fasta`). For genetically diverse pathogens where no single reference is close enough to all circulating lineages, a dataset can list additional reference sequences that contribute to the detection fingerprint. This broadens the detection range of `nextclade sort` and the Nextclade Web dataset selector without affecting alignment or analysis, which continue to use the main `reference.fasta`.
+
+Multi-reference detection is configured via the `minimizerIndex` field in `pathogen.json`. See the [pathogen configuration documentation](input-files/05-pathogen-config.md#multi-reference-dataset-suggestion-minimizerindex) for details.
+
 ## Datasets names and versions
 
 There are 2 concepts that are important to understand in order to work with Nextclade datasets: dataset name and dataset version. Similar to software, datasets are versioned to ensure reproducibility of results. A user will usually work with the latest version of a dataset, but can also choose to use a specific version.

@@ -172,6 +172,28 @@ Optional `dict`. Parameters for the tree building algorithm. These are identical
 - `withoutGreedyTreeBuilder`: If you don't want to use the greedy tree builder, set this to `true`. Default: `false`.
 - `maskedMutsWeight`: Parsimony weight for masked mutations. Default: `0.05`.
 
+#### Multi-reference dataset suggestion (`minimizerIndex`)
+
+Optional. Configures how the dataset is detected from query sequences by `nextclade sort` and the auto-detection in Nextclade Web. This affects only dataset suggestion -- it does not change alignment, mutation calling, or any analysis output.
+
+By default, Nextclade builds a detection fingerprint from the dataset's main reference sequence (`reference.fasta`). For genetically diverse pathogens where a single reference cannot reliably match all circulating lineages, you can provide additional reference sequences. The fingerprint is then built from the union of k-mers across all provided references, improving detection sensitivity without affecting analysis.
+
+- `references`: array of strings. Paths to FASTA files (relative to the dataset directory) whose sequences contribute to the detection fingerprint. Each file can contain one or more sequences. When this field is absent or empty, the main reference sequence is used alone (single-reference behavior, same as previous Nextclade versions).
+
+Example:
+
+```json
+{
+  "minimizerIndex": {
+    "references": ["minimizer_refs/additional_refs.fasta"]
+  }
+}
+```
+
+> 💡 The `references` listed here are used only for building the detection fingerprint (minimizer index). The alignment reference (`files.reference`) remains the sequence used for alignment and mutation calling. The two serve different purposes: one is for recognizing what the pathogen is, the other is the coordinate system for the analysis.
+
+> 💡 Select 2-5 representative sequences covering the major lineages or clades of the pathogen. Prefer phylogenetically distant, good-quality sequences. Avoid near-identical sequences, as they add redundancy without improving detection.
+
 #### Calculate phenotypic scores from mutations (`phenotypeData`)
 
 Nextclade can calculate numerical scores derived from mutations in a query sequence relative to the reference sequence.
@@ -282,5 +304,32 @@ The json specification looks as follows
 Both nucleotide (`nucMutLabelMap`) and amino acid (`aaMutLabelMap`) mutations can be labeled. Labeled "private" mutations are shown in the tool-tip of the mutation column when mutations "relative to parent" are shown (private mutations) and exported into the tabular output.
 
 > ⚠️ Note that the specification of these mutations breaks with the convention of zero-indexing. Instead, these labeled mutations are one-indexed and directly correspond to the mutations displayed in the UI or in the tables.
+
+#### Multi-reference dataset suggestion (`minimizerIndex`)
+
+Nextclade identifies the most appropriate dataset for a query sequence using a minimizer-based k-mer index. By default, the index is built from the dataset's main reference sequence (`reference.fasta`). For genetically diverse pathogens where a single reference does not capture enough diversity for reliable detection, a dataset can contribute minimizers from multiple reference sequences.
+
+To configure multi-reference suggestion, add a `minimizerIndex` object to `pathogen.json`:
+
+```json
+{
+  "minimizerIndex": {
+    "references": ["minimizer_refs/additional_refs.fasta"]
+  }
+}
+```
+
+- `references`: array of FASTA file paths relative to the dataset directory. Each file can contain one or more sequences. All sequences across all listed files contribute minimizers to the dataset's suggestion fingerprint. When this field is absent or empty, the dataset's main `reference.fasta` is used.
+
+The index build merges minimizers from all references by set union, so a query matching any one reference produces hits. The suggestion score compensates for the larger set by dividing by the expected number of hits from a single reference rather than the total minimizer count. This keeps scores comparable across single-reference and multi-reference datasets.
+
+Multi-reference suggestion affects only dataset detection (`nextclade sort` and the Nextclade Web dataset selector). It does not change alignment, mutation calling, or any analysis output. The dataset's main `reference.fasta` remains the alignment reference.
+
+Guidelines for selecting multiple references:
+
+- Choose 2--5 sequences representing major lineages or clades of the pathogen
+- Select phylogenetically distant representatives to maximize minimizer diversity
+- Use high-quality sequences with low ambiguity (N) content
+- Avoid near-identical sequences that would add few new minimizers
 
 > 💡 Nextclade CLI supports file compression and reading from standard input. See section [Compression, stdin](./compression.md) for more details.
