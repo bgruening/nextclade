@@ -1,3 +1,13 @@
+## 3.23.0
+
+### Multi-reference datasets
+
+Datasets can now include multiple reference sequences for auto-detection by `nextclade sort` and Nextclade Web. This enables reliable dataset suggestion for genetically diverse pathogens (e.g. enteroviruses) where no single reference sequence is close enough to all circulating lineages.
+
+Dataset authors list additional reference FASTA files in the new [`minimizerIndex`](https://docs.nextstrain.org/projects/nextclade/en/stable/user/input-files/05-pathogen-config.html#multi-reference-dataset-suggestion-minimizerindex) field of `pathogen.json`. The detection fingerprint is built from the union of k-mers across all listed references. The suggestion score divides by the expected hits from a single reference, so adding references broadens the detection range without diluting scores.
+
+Multi-reference detection is transparent: Nextclade Web suggestions, `nextclade sort` output format, alignment, mutation calling, and all analysis outputs are unchanged. Existing single-reference datasets are unaffected. The minimizer index is validated on load, rejecting malformed entries with clear errors. See [datasets documentation](https://docs.nextstrain.org/projects/nextclade/en/stable/user/datasets.html#multi-reference-datasets), [#1771](https://github.com/nextstrain/nextclade/pull/1771).
+
 ## 3.22.0
 
 ### Nextclade Web: configurable Relative-to dropdown ordering
